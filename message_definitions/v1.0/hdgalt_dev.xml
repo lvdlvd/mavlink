@@ -1,0 +1,112 @@
+<?xml version="1.0"?>
+<mavlink>
+  <!--
+    HDGALT development dialect.
+
+    Holds the in-development message/enum definitions for the ArduPlane
+    HDGALT (heading + altitude) two-axis autopilot mode. Kept in its own
+    file so it can be revved without churning ardupilotmega.xml and so
+    the whole feature can be reverted by removing the matching
+    <include> line from ardupilotmega.xml and deleting this file.
+
+    Message IDs are in the 52100-52199 range (well clear of the
+    AIRLINK pair at 52000/52001) to avoid colliding with anything
+    in common.xml or ardupilotmega.xml proper while these messages
+    remain experimental. When the design stabilises and the messages
+    are proposed for upstream common.xml, IDs will be renegotiated.
+
+    This file is a leaf: it is pulled in by ardupilotmega.xml via
+    <include>hdgalt_dev.xml</include>, so any consumer of the
+    ardupilotmega dialect picks it up automatically. The PLANE_MODE
+    entry extension below relies on gomavgen / pymavgen merging enum
+    entries across files by name, so PLANE_MODE_HDGALT shows up
+    alongside the other PLANE_MODE_* entries declared in
+    ardupilotmega.xml.
+  -->
+  <enums>
+    <enum name="PLANE_MODE">
+      <entry value="27" name="PLANE_MODE_HDGALT">
+        <description>HDGALT</description>
+      </entry>
+    </enum>
+    <enum name="HDGALT_COMMAND_FLAGS" bitmask="true">
+      <description>Bitmask of which axes a HDGALT_COMMAND sets. A clear bit means the autopilot keeps its current value for that axis.</description>
+      <entry value="1" name="HDGALT_COMMAND_FLAG_HEADING">
+        <description>Set if heading_deg is valid.</description>
+      </entry>
+      <entry value="2" name="HDGALT_COMMAND_FLAG_TURN_RATE">
+        <description>Set if turn_rate_dps is valid.</description>
+      </entry>
+      <entry value="4" name="HDGALT_COMMAND_FLAG_ALTITUDE">
+        <description>Set if altitude_m is valid.</description>
+      </entry>
+      <entry value="8" name="HDGALT_COMMAND_FLAG_CLIMB_RATE">
+        <description>Set if climb_rate_mps is valid.</description>
+      </entry>
+    </enum>
+    <enum name="HDGALT_STATE_FLAGS" bitmask="true">
+      <description>Bitmask of which axes the HDGALT mode is actively controlling.</description>
+      <entry value="1" name="HDGALT_STATE_FLAG_HEADING_ACTIVE">
+        <description>Set if heading is being actively controlled.</description>
+      </entry>
+      <entry value="2" name="HDGALT_STATE_FLAG_ALTITUDE_ACTIVE">
+        <description>Set if altitude is being actively controlled.</description>
+      </entry>
+    </enum>
+    <enum name="HDGALT_CAPTURE_STATE">
+      <description>Capture/hold phase reported by the HDGALT mode.</description>
+      <entry value="0" name="HDGALT_CAPTURE_HOLD">
+        <description>Both axes within deadband; holding.</description>
+      </entry>
+      <entry value="1" name="HDGALT_CAPTURE_LATERAL">
+        <description>Capturing heading; altitude held.</description>
+      </entry>
+      <entry value="2" name="HDGALT_CAPTURE_VERTICAL">
+        <description>Capturing altitude; heading held.</description>
+      </entry>
+      <entry value="3" name="HDGALT_CAPTURE_BOTH">
+        <description>Capturing both heading and altitude.</description>
+      </entry>
+    </enum>
+    <enum name="HDGALT_WARNING" bitmask="true">
+      <description>Warning bits reported in HDGALT_STATE.</description>
+      <entry value="1" name="HDGALT_WARNING_CLIMB_UNACHIEVABLE">
+        <description>Commanded altitude could not be reached; altitude target clipped to current, holding.</description>
+      </entry>
+      <entry value="2" name="HDGALT_WARNING_TURN_DERATED">
+        <description>Commanded turn rate clipped by bank or stall-margin limit.</description>
+      </entry>
+      <entry value="4" name="HDGALT_WARNING_AIRSPEED_LOW">
+        <description>Airspeed approaching the minimum at which HDGALT disengages.</description>
+      </entry>
+    </enum>
+  </enums>
+  <messages>
+    <message id="52100" name="HDGALT_COMMAND">
+      <description>Flight director command to the ArduPlane HDGALT mode: set commanded magnetic heading and/or barometric altitude with optional rate caps. Per-axis flags select which fields are applied; unset axes keep their current value.</description>
+      <field type="uint32_t" name="start_time_boot_ms" units="ms">AP-local time (same base as SYSTEM_TIME.time_boot_ms) at which to begin executing. 0 = execute on receipt. A future value queues the command (single slot, replaces any pending one). A past nonzero value executes immediately and is logged as late.</field>
+      <field type="uint16_t" name="flags" enum="HDGALT_COMMAND_FLAGS" display="bitmask">Bitmask selecting which axes this command sets.</field>
+      <field type="float" name="heading_deg" units="deg">Commanded magnetic heading, 0-360.</field>
+      <field type="float" name="turn_rate_dps" units="deg/s">Commanded turn rate magnitude during heading capture; AP picks the shortest direction.</field>
+      <field type="float" name="altitude_m" units="m">Commanded barometric altitude (MSL).</field>
+      <field type="float" name="climb_rate_mps" units="m/s">Commanded climb-rate cap magnitude during altitude capture; sign derived from the altitude delta.</field>
+    </message>
+    <message id="52101" name="HDGALT_STATE">
+      <description>Periodic state report from the ArduPlane HDGALT mode (1 Hz minimum while engaged), letting the flight director observe commanded versus achieved heading and altitude, capture phase, and warnings.</description>
+      <field type="uint32_t" name="time_boot_ms" units="ms">AP timestamp (time since system boot).</field>
+      <field type="uint16_t" name="flags" enum="HDGALT_STATE_FLAGS" display="bitmask">Bitmask of which axes are actively controlled.</field>
+      <field type="uint32_t" name="queued_start_time_ms" units="ms">Start time of the queued future command, or 0 if none queued.</field>
+      <field type="float" name="heading_target" units="deg">Current commanded heading.</field>
+      <field type="float" name="heading_current" units="deg">Measured magnetic heading.</field>
+      <field type="float" name="turn_rate_commanded" units="deg/s">Turn rate the FD asked for, or the parameter default.</field>
+      <field type="float" name="turn_rate_actual" units="deg/s">Turn rate the AP is actually achieving.</field>
+      <field type="float" name="altitude_target" units="m">Current commanded altitude.</field>
+      <field type="float" name="altitude_current" units="m">Measured barometric altitude.</field>
+      <field type="float" name="climb_rate_commanded" units="m/s">Commanded climb-rate cap.</field>
+      <field type="float" name="climb_rate_actual" units="m/s">Actual vertical speed.</field>
+      <field type="float" name="airspeed_current" units="m/s">Current airspeed, for FD situational awareness.</field>
+      <field type="uint8_t" name="capture_state" enum="HDGALT_CAPTURE_STATE">Capture/hold phase.</field>
+      <field type="uint16_t" name="warnings" enum="HDGALT_WARNING" display="bitmask">Warning bits.</field>
+    </message>
+  </messages>
+</mavlink>
