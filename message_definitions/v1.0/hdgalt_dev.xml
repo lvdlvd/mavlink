@@ -80,6 +80,48 @@
         <description>Airspeed approaching the minimum at which HDGALT disengages.</description>
       </entry>
     </enum>
+    <enum name="VNAV_OBS_KIND">
+      <description>Source kind of a VNAV_OBSERVATION; selects the interpretation of the bearing/range fields. The navigator's estimator never sees the kind beyond normalization.</description>
+      <entry value="0" name="VNAV_OBS_KIND_VISUAL">
+        <description>Visual landmark recognizer: bearing (relative or true per flags) and optional ground range.</description>
+      </entry>
+      <entry value="1" name="VNAV_OBS_KIND_VOR">
+        <description>VOR receiver: bearing_deg is the radial (bearing FROM the station, in the station's calibration frame); use decl_cdeg.</description>
+      </entry>
+      <entry value="2" name="VNAV_OBS_KIND_NDB">
+        <description>ADF/NDB: bearing_deg is relative to the aircraft nose.</description>
+      </entry>
+      <entry value="3" name="VNAV_OBS_KIND_DME">
+        <description>DME: range_m is SLANT range; no bearing.</description>
+      </entry>
+    </enum>
+    <enum name="VNAV_OBS_FLAGS" bitmask="true">
+      <description>Field-validity bits of a VNAV_OBSERVATION.</description>
+      <entry value="1" name="VNAV_OBS_FLAG_BEARING">
+        <description>bearing_deg (and bearing_sigma_deg) are valid.</description>
+      </entry>
+      <entry value="2" name="VNAV_OBS_FLAG_BEARING_RELATIVE">
+        <description>bearing_deg is body-frame relative to the aircraft nose, positive right; clear means true bearing aircraft to reference (visual) or kind-specific absolute (VOR radial).</description>
+      </entry>
+      <entry value="4" name="VNAV_OBS_FLAG_RANGE">
+        <description>range_m (and range_frac_sigma) are valid.</description>
+      </entry>
+      <entry value="8" name="VNAV_OBS_FLAG_DECL">
+        <description>decl_cdeg is valid (VOR station declination of record).</description>
+      </entry>
+    </enum>
+    <enum name="VNAV_POSE_RESULT">
+      <description>Status of a VNAV_POSE answer.</description>
+      <entry value="0" name="VNAV_POSE_OK">
+        <description>Pose fields are valid.</description>
+      </entry>
+      <entry value="1" name="VNAV_POSE_UNANCHORED">
+        <description>The navigator's estimator has not initialized yet; retry later.</description>
+      </entry>
+      <entry value="2" name="VNAV_POSE_NO_ATTITUDE">
+        <description>No attitude telemetry seen yet; retry later.</description>
+      </entry>
+    </enum>
   </enums>
   <messages>
     <message id="52100" name="HDGALT_COMMAND">
@@ -107,6 +149,41 @@
       <field type="float" name="airspeed_current" units="m/s">Current airspeed, for FD situational awareness.</field>
       <field type="uint8_t" name="capture_state" enum="HDGALT_CAPTURE_STATE">Capture/hold phase.</field>
       <field type="uint16_t" name="warnings" enum="HDGALT_WARNING" display="bitmask">Warning bits.</field>
+    </message>
+    <message id="52110" name="VNAV_OBSERVATION">
+      <description>A ranked-candidate reference-point observation for the navigator (visual landmark recognizer, VOR, NDB or DME). Candidates are the genuinely confusable set, pre-thinned by the observer; scores are relative weights, monotonic in confidence (calibration not required, honesty about uncertainty is), renormalized with null_score to sum 1 by the consumer. The null row is the first-class "this sighting corroborates nothing" outcome and is actively consumed; do not suppress it.</description>
+      <field type="uint32_t" name="time_boot_ms" units="ms">Capture time of the underlying image/signal (same base as SYSTEM_TIME.time_boot_ms). Processing lag up to the navigator's window (default 6 min) is compensated; 0 means unknown and is treated as arrival time.</field>
+      <field type="uint8_t" name="kind" enum="VNAV_OBS_KIND">Observation source kind.</field>
+      <field type="uint8_t" name="flags" enum="VNAV_OBS_FLAGS" display="bitmask">Field-validity bits.</field>
+      <field type="float" name="bearing_deg" units="deg">Bearing per kind and flags: relative to the nose (positive right) or true aircraft-to-reference; for VOR the radial.</field>
+      <field type="float" name="bearing_sigma_deg" units="deg">1-sigma bearing error; 0 = consumer default.</field>
+      <field type="float" name="range_m" units="m">Range: horizontal ground range (visual), slant range (DME); see kind.</field>
+      <field type="float" name="range_frac_sigma">Fractional 1-sigma range error; 0 = consumer default.</field>
+      <field type="int16_t" name="decl_cdeg" units="cdeg">VOR station declination of record, centidegrees east-positive (the magnetic alignment the station was calibrated to, not the current field).</field>
+      <field type="uint8_t" name="null_score">Null-row weight, 0..255 scale.</field>
+      <field type="uint8_t" name="n_candidates">Number of valid entries in the candidate arrays, 1..5.</field>
+      <field type="int32_t[5]" name="cand_lat" units="degE7">Candidate latitudes (WGS84), degrees * 1e7.</field>
+      <field type="int32_t[5]" name="cand_lon" units="degE7">Candidate longitudes (WGS84), degrees * 1e7.</field>
+      <field type="uint8_t[5]" name="cand_score">Candidate weights, 0..255 scale, ranked descending.</field>
+      <field type="int16_t[5]" name="cand_elev_m" units="m">Candidate elevations AMSL (from the observer's database); 0 if unknown.</field>
+    </message>
+    <message id="52111" name="VNAV_POSE_REQUEST">
+      <description>Ask the navigator for its believed aircraft pose at a capture time, to seed a landmark search (an ever-growing circle around the answer). The navigator replies with VNAV_POSE on the same link.</description>
+      <field type="uint32_t" name="time_boot_ms" units="ms">Capture time being asked about (same base as SYSTEM_TIME.time_boot_ms).</field>
+    </message>
+    <message id="52112" name="VNAV_POSE">
+      <description>The navigator's believed aircraft pose at the requested capture time, retrodicted consistently with how a delayed observation at that time will be fused. On a non-OK result only time_boot_ms and result are meaningful; back off and retry.</description>
+      <field type="uint32_t" name="time_boot_ms" units="ms">Echo of the request's capture time.</field>
+      <field type="uint8_t" name="result" enum="VNAV_POSE_RESULT">Validity of the pose fields.</field>
+      <field type="int32_t" name="lat" units="degE7">Believed latitude at capture time (WGS84), degrees * 1e7.</field>
+      <field type="int32_t" name="lon" units="degE7">Believed longitude at capture time (WGS84), degrees * 1e7.</field>
+      <field type="float" name="pos_sigma_m" units="m">1-sigma-ish horizontal uncertainty: a sensible initial search radius, not a bound.</field>
+      <field type="float" name="alt_m" units="m">Barometric altitude AMSL, bias-corrected; soft (can carry a QNH-class offset).</field>
+      <field type="int16_t" name="roll_cdeg" units="cdeg">Roll at capture time, centidegrees, right positive.</field>
+      <field type="int16_t" name="pitch_cdeg" units="cdeg">Pitch at capture time, centidegrees, up positive.</field>
+      <field type="uint16_t" name="yaw_cdeg" units="cdeg">TRUE heading at capture time, centidegrees, 0..35999.</field>
+      <field type="uint8_t" name="nhyp">Live hypothesis count; above 1 the navigator entertains multiple position stories and the search should widen.</field>
+      <field type="uint8_t" name="null_ema">Lost-track indicator, 0..255 scale; high means recent sightings corroborated nothing - widen everything.</field>
     </message>
   </messages>
 </mavlink>
