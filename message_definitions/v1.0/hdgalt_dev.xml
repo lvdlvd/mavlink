@@ -94,6 +94,9 @@
       <entry value="3" name="VNAV_OBS_KIND_DME">
         <description>DME: range_m is SLANT range; no bearing.</description>
       </entry>
+      <entry value="4" name="VNAV_OBS_KIND_POSFIX">
+        <description>Direct position measurement: each candidate lat/lon IS a measured aircraft position (kidnap-search posterior peak, or a verified GPS-class fix) with horizontal 1-sigma pos_sigma_m; no bearing or range. n_candidates 0 with null mass is the null report ("looked, recognized nothing"). birth_sigma_m above 0 marks peaks that may birth fresh hypotheses when they corroborate no incumbent.</description>
+      </entry>
     </enum>
     <enum name="VNAV_OBS_FLAGS" bitmask="true">
       <description>Field-validity bits of a VNAV_OBSERVATION.</description>
@@ -166,6 +169,9 @@
       <field type="int32_t[5]" name="cand_lon" units="degE7">Candidate longitudes (WGS84), degrees * 1e7.</field>
       <field type="uint8_t[5]" name="cand_score">Candidate weights, 0..255 scale, ranked descending.</field>
       <field type="int16_t[5]" name="cand_elev_m" units="m">Candidate elevations AMSL (from the observer's database); 0 if unknown.</field>
+      <extensions/>
+      <field type="float" name="pos_sigma_m" units="m">POSFIX kind: horizontal 1-sigma of each candidate-as-position, metres; 0 = not a position measurement.</field>
+      <field type="float" name="birth_sigma_m" units="m">POSFIX kind: position sigma for hypotheses birthed from unfused peaks; 0 = peaks never birth.</field>
     </message>
     <message id="52111" name="VNAV_POSE_REQUEST">
       <description>Ask the navigator for its believed aircraft pose at a capture time, to seed a landmark search (an ever-growing circle around the answer). The navigator replies with VNAV_POSE on the same link.</description>
@@ -184,6 +190,8 @@
       <field type="uint16_t" name="yaw_cdeg" units="cdeg">TRUE heading at capture time, centidegrees, 0..35999.</field>
       <field type="uint8_t" name="nhyp">Live hypothesis count; above 1 the navigator entertains multiple position stories and the search should widen.</field>
       <field type="uint8_t" name="null_ema">Lost-track indicator, 0..255 scale; high means recent sightings corroborated nothing - widen everything.</field>
+      <extensions/>
+      <field type="uint8_t" name="lost">LOST declaration (0/1): the navigator's widening is capped with null mass still high; dead reckoning alone drives the estimate and an external kidnap search should engage.</field>
     </message>
   </messages>
 </mavlink>
