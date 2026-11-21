@@ -172,6 +172,10 @@
       <extensions/>
       <field type="float" name="pos_sigma_m" units="m">POSFIX kind: horizontal 1-sigma of each candidate-as-position, metres; 0 = not a position measurement.</field>
       <field type="float" name="birth_sigma_m" units="m">POSFIX kind: position sigma for hypotheses birthed from unfused peaks; 0 = peaks never birth.</field>
+      <field type="float" name="alt_msl_m" units="m">Line-up fix: the aircraft altitude AMSL the solve found at capture time; valid when alt_sigma_m is above 0.</field>
+      <field type="float" name="alt_given_m" units="m">Line-up fix: the altitude AMSL the scene was cut at (the height given to the solve).</field>
+      <field type="float" name="alt_sigma_m" units="m">Line-up fix: 1-sigma of alt_msl_m; 0 = the observation carries no height.</field>
+      <field type="float" name="alt_keep">Line-up fix: the share of an error of alt_given_m the solve keeps in alt_msl_m, 0..1; 0 = consumer default.</field>
     </message>
     <message id="52111" name="VNAV_POSE_REQUEST">
       <description>Ask the navigator for its believed aircraft pose at a capture time, to seed a landmark search (an ever-growing circle around the answer). The navigator replies with VNAV_POSE on the same link.</description>
